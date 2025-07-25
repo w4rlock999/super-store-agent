@@ -144,3 +144,8 @@ server/runtime_data/*
 server/mlruns/
 server/mlartifacts/
 server/chroma_db/
+
+# ML and DB artifacts
+server/chroma_db/
+server/mlartifacts/
+server/mlruns/
