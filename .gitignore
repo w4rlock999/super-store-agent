@@ -149,3 +149,8 @@ server/chroma_db/
 server/chroma_db/
 server/mlartifacts/
 server/mlruns/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
