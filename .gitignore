@@ -150,6 +150,13 @@ server/chroma_db/
 server/mlartifacts/
 server/mlruns/
 
+# Python virtual environments
+.venv/
+venv/
+ENV/
+env/
+*.venv/
+
 # Python cache files
 __pycache__/
 *.py[cod]
