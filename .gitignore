@@ -140,3 +140,7 @@ server/runtime_data/*
 !server/runtime_data/.gitkeep
 
 !server/.env.example
+
+server/mlruns/
+server/mlartifacts/
+server/chroma_db/
