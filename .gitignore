@@ -131,4 +131,12 @@ dist
 
 *.venv/
 
-runtime_data/
+!runtime_data/
+runtime_data/*
+!runtime_data/.gitkeep
+
+!server/runtime_data/
+server/runtime_data/*
+!server/runtime_data/.gitkeep
+
+!server/.env.example
