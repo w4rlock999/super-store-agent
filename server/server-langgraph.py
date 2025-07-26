@@ -25,7 +25,7 @@ llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2, api_key=os.getenv("OPENAI
 app = Flask(__name__)
 
 # ////////////////////////////////////////////////////////////////
-# //////////////     Define tool for agents      /////////////////
+# //////////////     Define tools for agents      ////////////////
 # ////////////////////////////////////////////////////////////////
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
 
@@ -241,7 +241,6 @@ class RevenueAnalystAgent:
         you can use the tool run_python_code to run code to yield all the above information.
 
         the data provided to you is a json file from shopify GraphQL, with key "node" and sub keys under it.
-        the date for each order is indicated by key "processedAt" NOT "createdAt" as you might understand previously.
         if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first.
         
         Do the task ONE BY ONE, generate your thought first, what you are going to do, and then do the task (e.g. using tool) ONLY AFTER you say clearly what you are going to do.
@@ -250,6 +249,36 @@ class RevenueAnalystAgent:
 
         if you have done all the analysis and have written the final data for the final report agent (your supervisor), end the response with this exact string:
         "ALL REVENUE ANALYSIS TASK IS DONE"
+
+        To code properly, here is the data structure and the keys you need to understand the data:
+        
+        The data you will analyze is a list of orders, where each order has the following structure:
+        
+        - Each file contain list object of order entry
+        - Each order is represented as an object under the key "node".
+        - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
+        - "name": The order number, formatted as a string such as "#1009".
+        - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
+        - "totalPriceSet": Contains the total price information for the order.
+            - "shopMoney": An object with:
+                - "amount": The total order amount as a string (e.g., "90.0").
+                - "currencyCode": The currency code as a string (e.g., "GBP").
+        - "customer": Information about the customer who placed the order.
+            - "firstName": Customer's first name (string).
+            - "lastName": Customer's last name (string).
+            - "email": Customer's email address (string).
+        - "lineItems": Contains the items included in the order.
+            - "edges": This is a list, where each item in the list represents a product in the order.
+                - Each item has a "node" with:
+                    - "title": The product name (string).
+                    - "quantity": The number of this product ordered (number).
+                    - "variant": Information about the product variant.
+                        - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
+                        - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+
+        The most important field for dates is "processedAt", which tells you when the order was completed. Do not use "createdAt".
+        most importantly, the date for each order is indicated by key "processedAt" NOT "createdAt".
+        
 
         this is the previous messages history:
     """
@@ -322,28 +351,30 @@ class FinalReportAgent:
     class AgentState(MessagesState):
         pass
 
+    tobeadded_prompt = """- order report: overall order details, average order per person, trend of number of order, average purchase value per person, purchase trend in a year
+        - product performance: top/bottom product from quantity sold, top/bottom product per month, top/bottom product per quarter, top annual revenue contributor product"""
+
     system_prompt_string = """
-        You are a supervisor agent for final executive report writing, you will plan, manage agents, assign them to tasks, and compile their output into draft of relevant informations and write the final report. 
-        What you need to write is an annual (or quarterly) sales report of a shopify store Urban Thread, selling apparels and accessories.
+        You are a supervisor agent for final executive report writing, you will plan, manage agents, delegate specific agents to their tasks, and compile their output into draft of relevant informations, and write the final report. 
+        What you need to write is sales report for a specific period of time of a shopify store Urban Thread, selling apparels and accessories.
 
         For a final annual executive report, it must have all of the item here:
-        - full revenue report: total revenue, monthly revenue, trend, quarterly revenue 
-        - order report: overall order details, average order per person, trend of number of order, average purchase value per person, purchase trend in a year
-        - product performance: top/bottom product from quantity sold, top/bottom product per month, top/bottom product per quarter, top annual revenue contributor product
-        
-        let's limit the scope to only revenue report and nothing else for now as the system is being built for the other.
+        1. full revenue report: total revenue, monthly revenue, trend, quarterly revenue (handoff to revenue analyst agent)
 
-        Do this tasks one task at a time:
-
-        1. First you need to make plan on what to do. Summarize the request from the chat history. Write the period of final executive report requested.
         
-        2. Retrieve the data you need using the tool get_order_data_for_period for the valid requested period
-        
-        3. After that, you will then delegate the revenue analysis to the revenue analyst agent, by providing it with the relevant file name for the requested period, and also the list of tasks it must do.
-        You need to review the output, refine it, and return it to the revenue analyst agent if it need to redo the task.
+        To finish the final report, do this one by one
 
-        After the revenue analyst agent finish all their task, it will provide you with the final insight.
-        You will then provide the final report in a markdown format without any quotes or anything, ready to be rendered.
+        1. First you must make plan on what to do. Summarize the request from the chat history. Write the period of final executive report requested.
+        
+        2. Retrieve the data you need using the tool get_order_data_for_period for the valid requested period, output the file name so that future agent know what the file name is.
+        
+        3. Only after retrieve the data in previous step, you will then delegate the revenue analysis to the revenue analyst agent by following this step: 
+            - Generate the task to do WITHOUT calling the revenue analyst agent, and provide the relevant file name for the requested period.
+            - Delegate the task by calling the handoff tool for revenue analyst agent
+        
+        4. Finally you must review the output from worker agent and present it to the Main Agent.
+
+        You must present the final report in a markdown format without any quotes or anything, ready to be rendered.
 
         If you have done writing the final report and want to pass it to the main agent, write the report in markdown format, ready to be rendered, and start and end with this format:
 
@@ -475,6 +506,31 @@ class MainAgent:
 
     When user request for a final report, you will know to delegate the work to the final report agent.
     Check the chat history so far, when you see in the chat history that the final report agent already return you the requested final report and you have not present it to the user, you MUST present it to the user if you haven't!
+
+    To code properly, you will need to understand the structure of the order data, where each order has the following structure:
+
+    - Each file contain list object of order entry
+    - Each order is represented as an object under the key "node".
+    - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
+    - "name": The order number, formatted as a string such as "#1009".
+    - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
+    - "totalPriceSet": Contains the total price information for the order.
+        - "shopMoney": An object with:
+            - "amount": The total order amount as a string (e.g., "90.0").
+            - "currencyCode": The currency code as a string (e.g., "GBP").
+    - "customer": Information about the customer who placed the order.
+        - "firstName": Customer's first name (string).
+        - "lastName": Customer's last name (string).
+        - "email": Customer's email address (string).
+    - "lineItems": Contains the items included in the order.
+        - "edges": This is a list, where each item in the list represents a product in the order.
+            - Each item has a "node" with:
+                - "title": The product name (string).
+                - "quantity": The number of this product ordered (number).
+                - "variant": Information about the product variant.
+                    - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
+                    - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+
 
     Here is the chat history so far:
     """
