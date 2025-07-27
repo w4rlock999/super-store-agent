@@ -243,7 +243,7 @@ class ProductPerformanceAnalystAgent:
         you can use the tool run_python_code to run code to yield all the above information.
 
         the data provided to you is a json file from shopify GraphQL, with key "node" and sub keys under it.
-        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first.
+        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first by picking two first entry of the data. NEVER OUTPUT THE WHOLE FILE.
 
         Do the task ONE BY ONE, generate your thought first, what you are going to do, and then do the task (e.g. using tool) ONLY AFTER you say clearly what you are going to do.
 
@@ -256,27 +256,32 @@ class ProductPerformanceAnalystAgent:
 
         The data you will analyze is a list of orders, where each order has the following structure:
 
-        - Each file contain list object of order entry
-        - Each order is represented as an object under the key "node".
-        - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
-        - "name": The order number, formatted as a string such as "#1009".
-        - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
-        - "totalPriceSet": Contains the total price information for the order.
-            - "shopMoney": An object with:
-                - "amount": The total order amount as a string (e.g., "90.0").
-                - "currencyCode": The currency code as a string (e.g., "GBP").
-        - "customer": Information about the customer who placed the order.
-            - "firstName": Customer's first name (string).
-            - "lastName": Customer's last name (string).
-            - "email": Customer's email address (string).
-        - "lineItems": Contains the items included in the order.
-            - "edges": This is a list, where each item in the list represents a product in the order.
-                - Each item has a "node" with:
-                    - "title": The product name (string).
-                    - "quantity": The number of this product ordered (number).
-                    - "variant": Information about the product variant.
-                        - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
-                        - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+        The data is structured as an array of objects, where each object contains a node key representing an order. Here’s how to access various elements:
+
+        Order ID and Name
+
+        ID: order['node']['id']
+        Name: order['node']['name']
+        Processed Date
+
+        Processed At: order['node']['processedAt']
+        Total Price
+
+        Amount: order['node']['totalPriceSet']['shopMoney']['amount']
+        Currency Code: order['node']['totalPriceSet']['shopMoney']['currencyCode']
+        Customer Information
+
+        First Name: order['node']['customer']['firstName']
+        Last Name: order['node']['customer']['lastName']
+        Email: order['node']['customer']['email']
+        Line Items
+
+        Line Items Array: order['node']['lineItems']['edges']
+        To access each line item:
+        Title: line_item['node']['title']
+        Quantity: line_item['node']['quantity']
+        Variant ID: line_item['node']['variant']['id']
+        Variant Title: line_item['node']['variant']['title']
 
         The most important field for dates is "processedAt", which tells you when the order was completed. Do not use "createdAt".
         most importantly, the date for each order is indicated by key "processedAt" NOT "createdAt".
@@ -359,7 +364,7 @@ class OrderAnalystAgent:
         you can use the tool run_python_code to run code to yield all the above information.
 
         the data provided to you is a json file from shopify GraphQL, with key "node" and sub keys under it.
-        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first.
+        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first by picking two first entry of the data. NEVER OUTPUT THE WHOLE FILE.
 
         Do the task ONE BY ONE, generate your thought first, what you are going to do, and then do the task (e.g. using tool) ONLY AFTER you say clearly what you are going to do.
 
@@ -372,27 +377,32 @@ class OrderAnalystAgent:
 
         The data you will analyze is a list of orders, where each order has the following structure:
 
-        - Each file contain list object of order entry
-        - Each order is represented as an object under the key "node".
-        - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
-        - "name": The order number, formatted as a string such as "#1009".
-        - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
-        - "totalPriceSet": Contains the total price information for the order.
-            - "shopMoney": An object with:
-                - "amount": The total order amount as a string (e.g., "90.0").
-                - "currencyCode": The currency code as a string (e.g., "GBP").
-        - "customer": Information about the customer who placed the order.
-            - "firstName": Customer's first name (string).
-            - "lastName": Customer's last name (string).
-            - "email": Customer's email address (string).
-        - "lineItems": Contains the items included in the order.
-            - "edges": This is a list, where each item in the list represents a product in the order.
-                - Each item has a "node" with:
-                    - "title": The product name (string).
-                    - "quantity": The number of this product ordered (number).
-                    - "variant": Information about the product variant.
-                        - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
-                        - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+        The data is structured as an array of objects, where each object contains a node key representing an order. Here’s how to access various elements:
+
+        Order ID and Name
+
+        ID: order['node']['id']
+        Name: order['node']['name']
+        Processed Date
+
+        Processed At: order['node']['processedAt']
+        Total Price
+
+        Amount: order['node']['totalPriceSet']['shopMoney']['amount']
+        Currency Code: order['node']['totalPriceSet']['shopMoney']['currencyCode']
+        Customer Information
+
+        First Name: order['node']['customer']['firstName']
+        Last Name: order['node']['customer']['lastName']
+        Email: order['node']['customer']['email']
+        Line Items
+
+        Line Items Array: order['node']['lineItems']['edges']
+        To access each line item:
+        Title: line_item['node']['title']
+        Quantity: line_item['node']['quantity']
+        Variant ID: line_item['node']['variant']['id']
+        Variant Title: line_item['node']['variant']['title']
 
         The most important field for dates is "processedAt", which tells you when the order was completed. Do not use "createdAt".
         most importantly, the date for each order is indicated by key "processedAt" NOT "createdAt".
@@ -475,7 +485,7 @@ class RevenueAnalystAgent:
         you can use the tool run_python_code to run code to yield all the above information.
 
         the data provided to you is a json file from shopify GraphQL, with key "node" and sub keys under it.
-        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first.
+        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first by picking two first entry of the data. NEVER OUTPUT THE WHOLE FILE.
         
         Do the task ONE BY ONE, generate your thought first, what you are going to do, and then do the task (e.g. using tool) ONLY AFTER you say clearly what you are going to do.
 
@@ -488,27 +498,32 @@ class RevenueAnalystAgent:
         
         The data you will analyze is a list of orders, where each order has the following structure:
         
-        - Each file contain list object of order entry
-        - Each order is represented as an object under the key "node".
-        - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
-        - "name": The order number, formatted as a string such as "#1009".
-        - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
-        - "totalPriceSet": Contains the total price information for the order.
-            - "shopMoney": An object with:
-                - "amount": The total order amount as a string (e.g., "90.0").
-                - "currencyCode": The currency code as a string (e.g., "GBP").
-        - "customer": Information about the customer who placed the order.
-            - "firstName": Customer's first name (string).
-            - "lastName": Customer's last name (string).
-            - "email": Customer's email address (string).
-        - "lineItems": Contains the items included in the order.
-            - "edges": This is a list, where each item in the list represents a product in the order.
-                - Each item has a "node" with:
-                    - "title": The product name (string).
-                    - "quantity": The number of this product ordered (number).
-                    - "variant": Information about the product variant.
-                        - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
-                        - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+        The data is structured as an array of objects, where each object contains a node key representing an order. Here’s how to access various elements:
+
+        Order ID and Name
+
+        ID: order['node']['id']
+        Name: order['node']['name']
+        Processed Date
+
+        Processed At: order['node']['processedAt']
+        Total Price
+
+        Amount: order['node']['totalPriceSet']['shopMoney']['amount']
+        Currency Code: order['node']['totalPriceSet']['shopMoney']['currencyCode']
+        Customer Information
+
+        First Name: order['node']['customer']['firstName']
+        Last Name: order['node']['customer']['lastName']
+        Email: order['node']['customer']['email']
+        Line Items
+
+        Line Items Array: order['node']['lineItems']['edges']
+        To access each line item:
+        Title: line_item['node']['title']
+        Quantity: line_item['node']['quantity']
+        Variant ID: line_item['node']['variant']['id']
+        Variant Title: line_item['node']['variant']['title']
 
         The most important field for dates is "processedAt", which tells you when the order was completed. Do not use "createdAt".
         most importantly, the date for each order is indicated by key "processedAt" NOT "createdAt".
@@ -783,28 +798,34 @@ class MainAgent:
     Check the chat history so far, when you see in the chat history that the final report agent already return you the requested final report and you have not present it to the user, you MUST present it to the user if you haven't!
 
     To code properly, you will need to understand the structure of the order data, where each order has the following structure:
+    If you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first by picking two first entry of the data. NEVER OUTPUT THE WHOLE FILE.
+    
+    The data is structured as an array of objects, where each object contains a node key representing an order. Here’s how to access various elements:
 
-    - Each file contain list object of order entry
-    - Each order is represented as an object under the key "node".
-    - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
-    - "name": The order number, formatted as a string such as "#1009".
-    - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
-    - "totalPriceSet": Contains the total price information for the order.
-        - "shopMoney": An object with:
-            - "amount": The total order amount as a string (e.g., "90.0").
-            - "currencyCode": The currency code as a string (e.g., "GBP").
-    - "customer": Information about the customer who placed the order.
-        - "firstName": Customer's first name (string).
-        - "lastName": Customer's last name (string).
-        - "email": Customer's email address (string).
-    - "lineItems": Contains the items included in the order.
-        - "edges": This is a list, where each item in the list represents a product in the order.
-            - Each item has a "node" with:
-                - "title": The product name (string).
-                - "quantity": The number of this product ordered (number).
-                - "variant": Information about the product variant.
-                    - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
-                    - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+    Order ID and Name
+
+    ID: order['node']['id']
+    Name: order['node']['name']
+    Processed Date
+
+    Processed At: order['node']['processedAt']
+    Total Price
+
+    Amount: order['node']['totalPriceSet']['shopMoney']['amount']
+    Currency Code: order['node']['totalPriceSet']['shopMoney']['currencyCode']
+    Customer Information
+
+    First Name: order['node']['customer']['firstName']
+    Last Name: order['node']['customer']['lastName']
+    Email: order['node']['customer']['email']
+    Line Items
+
+    Line Items Array: order['node']['lineItems']['edges']
+    To access each line item:
+    Title: line_item['node']['title']
+    Quantity: line_item['node']['quantity']
+    Variant ID: line_item['node']['variant']['id']
+    Variant Title: line_item['node']['variant']['title']
 
 
     Here is the chat history so far:
