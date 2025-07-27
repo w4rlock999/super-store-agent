@@ -184,7 +184,7 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
     ) -> Command:
 
         tool_message = ToolMessage(
-            content=f"Successfully transferred to {agent_name}",
+            content=f"<<HANDOFF TOOL CALLED>> Successfully transferred to {agent_name}",
             name=name,
             tool_call_id=tool_call_id,
         )
@@ -212,6 +212,242 @@ def pretty_print_message(message, indent=False, agent_name=""):
     indented = "\n".join("\t" + c for c in pretty_message.split("\n"))
     print(indented)
 
+# ////////////////////////////////////////////////////////////////
+# //////////////           Define Agents          ////////////////
+# ////////////////////////////////////////////////////////////////
+# \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+class ProductPerformanceAnalystAgent:
+
+    def __init__(self, llm):
+        self.tools = [run_python_code, tavily_search_tool]
+
+        self.llm_with_tools = llm.bind_tools(self.tools)
+        self.llm = llm.bind_tools(self.tools)
+
+        self.tool_node = ToolNode(self.tools)
+        self.graph = self._create_agent()
+
+    class AgentState(MessagesState):
+        pass
+
+    system_prompt_string = """
+        You are order analysis agent, you will need to analyse order related insight out of sales data.
+        The final report agent will call you and give you the relevenat data (its filename, which you can use in the analysis python code)
+
+        You need to provide the following report from the data, for the requested period:
+        1. total number of order overall
+        2. number of order trend on each month
+        3. average spent per order overall
+        4. average spent per order trend on each month
+
+        you can use the tool run_python_code to run code to yield all the above information.
+
+        the data provided to you is a json file from shopify GraphQL, with key "node" and sub keys under it.
+        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first.
+
+        Do the task ONE BY ONE, generate your thought first, what you are going to do, and then do the task (e.g. using tool) ONLY AFTER you say clearly what you are going to do.
+
+        Calculate every insight in one program at once if you can to be efficient in your work!
+
+        if you have done all the analysis and have written the final data for the final report agent (your supervisor), end the response with this exact string:
+        "ALL ORDER ANALYSIS TASK IS DONE"
+
+        To code properly, here is the data structure and the keys you need to understand the data:
+
+        The data you will analyze is a list of orders, where each order has the following structure:
+
+        - Each file contain list object of order entry
+        - Each order is represented as an object under the key "node".
+        - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
+        - "name": The order number, formatted as a string such as "#1009".
+        - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
+        - "totalPriceSet": Contains the total price information for the order.
+            - "shopMoney": An object with:
+                - "amount": The total order amount as a string (e.g., "90.0").
+                - "currencyCode": The currency code as a string (e.g., "GBP").
+        - "customer": Information about the customer who placed the order.
+            - "firstName": Customer's first name (string).
+            - "lastName": Customer's last name (string).
+            - "email": Customer's email address (string).
+        - "lineItems": Contains the items included in the order.
+            - "edges": This is a list, where each item in the list represents a product in the order.
+                - Each item has a "node" with:
+                    - "title": The product name (string).
+                    - "quantity": The number of this product ordered (number).
+                    - "variant": Information about the product variant.
+                        - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
+                        - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+
+        The most important field for dates is "processedAt", which tells you when the order was completed. Do not use "createdAt".
+        most importantly, the date for each order is indicated by key "processedAt" NOT "createdAt".
+
+
+        this is the previous messages history:
+    """
+
+    def main_node(self, state: AgentState):
+
+        prompt_template = ChatPromptTemplate([
+          ("system", self.system_prompt_string)
+        ])
+
+        system_prompt = prompt_template.invoke({})
+
+        messages = [SystemMessage(content=system_prompt.to_string())] + state["messages"]
+        response = self.llm.invoke(messages)
+
+        pretty_print_message(response, agent_name="order analyst")
+
+        return {"messages": [response]}
+
+    def path_tool_model(self, state: AgentState):
+
+        messages = state.get("messages", [])
+        if not messages:
+            return END
+        last_message = messages[-1]
+    
+        if last_message.tool_calls:
+            return "tools"
+        elif "ALL ORDER ANALYSIS TASK IS DONE" in last_message.content:
+            return END
+        
+        return "model"
+
+    def _create_agent(self):
+        graph = StateGraph(self.AgentState)
+        
+        # Add the model node
+        graph.add_node("model", self.main_node)
+        graph.add_node("tools", self.tool_node)
+        graph.set_entry_point("model")
+        
+        graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
+        graph.add_edge("tools", "model")
+        
+        # self.checkpointer = MemorySaver()
+        # agent_graph = graph.compile(checkpointer=self.checkpointer)
+        agent_graph = graph.compile()
+        
+        return agent_graph   
+
+
+class OrderAnalystAgent:
+
+    def __init__(self, llm):
+        self.tools = [run_python_code, tavily_search_tool]
+
+        self.llm_with_tools = llm.bind_tools(self.tools)
+        self.llm = llm.bind_tools(self.tools)
+
+        self.tool_node = ToolNode(self.tools)
+        self.graph = self._create_agent()
+
+    class AgentState(MessagesState):
+        pass
+
+    system_prompt_string = """
+        You are order analysis agent, you will need to analyse order related insight out of sales data.
+        The final report agent will call you and give you the relevenat data (its filename, which you can use in the analysis python code)
+
+        You need to provide the following report from the data, for the requested period:
+        1. total number of order overall
+        2. number of order trend on each month
+        3. average spent per order overall
+        4. average spent per order trend on each month
+
+        you can use the tool run_python_code to run code to yield all the above information.
+
+        the data provided to you is a json file from shopify GraphQL, with key "node" and sub keys under it.
+        if you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first.
+
+        Do the task ONE BY ONE, generate your thought first, what you are going to do, and then do the task (e.g. using tool) ONLY AFTER you say clearly what you are going to do.
+
+        Calculate every insight in one program at once if you can to be efficient in your work!
+
+        if you have done all the analysis and have written the final data for the final report agent (your supervisor), end the response with this exact string:
+        "ALL ORDER ANALYSIS TASK IS DONE"
+
+        To code properly, here is the data structure and the keys you need to understand the data:
+
+        The data you will analyze is a list of orders, where each order has the following structure:
+
+        - Each file contain list object of order entry
+        - Each order is represented as an object under the key "node".
+        - "id": This is the unique Shopify order ID, formatted as a string like "gid://shopify/Order/{{numeric_id}}".
+        - "name": The order number, formatted as a string such as "#1009".
+        - "processedAt": The date and time when the order was processed, in ISO 8601 format (e.g., "2024-01-04T00:00:00Z").
+        - "totalPriceSet": Contains the total price information for the order.
+            - "shopMoney": An object with:
+                - "amount": The total order amount as a string (e.g., "90.0").
+                - "currencyCode": The currency code as a string (e.g., "GBP").
+        - "customer": Information about the customer who placed the order.
+            - "firstName": Customer's first name (string).
+            - "lastName": Customer's last name (string).
+            - "email": Customer's email address (string).
+        - "lineItems": Contains the items included in the order.
+            - "edges": This is a list, where each item in the list represents a product in the order.
+                - Each item has a "node" with:
+                    - "title": The product name (string).
+                    - "quantity": The number of this product ordered (number).
+                    - "variant": Information about the product variant.
+                        - "id": The Shopify variant ID as a string (e.g., "gid://shopify/ProductVariant/{{numeric_id}}").
+                        - "title": Details about the variant, such as size and color (string, e.g., "L / Grey").
+
+        The most important field for dates is "processedAt", which tells you when the order was completed. Do not use "createdAt".
+        most importantly, the date for each order is indicated by key "processedAt" NOT "createdAt".
+
+
+        this is the previous messages history:
+    """
+
+    def main_node(self, state: AgentState):
+
+        prompt_template = ChatPromptTemplate([
+          ("system", self.system_prompt_string)
+        ])
+
+        system_prompt = prompt_template.invoke({})
+
+        messages = [SystemMessage(content=system_prompt.to_string())] + state["messages"]
+        response = self.llm.invoke(messages)
+
+        pretty_print_message(response, agent_name="order analyst")
+
+        return {"messages": [response]}
+
+    def path_tool_model(self, state: AgentState):
+
+        messages = state.get("messages", [])
+        if not messages:
+            return END
+        last_message = messages[-1]
+    
+        if last_message.tool_calls:
+            return "tools"
+        elif "ALL ORDER ANALYSIS TASK IS DONE" in last_message.content:
+            return END
+        
+        return "model"
+
+    def _create_agent(self):
+        graph = StateGraph(self.AgentState)
+        
+        # Add the model node
+        graph.add_node("model", self.main_node)
+        graph.add_node("tools", self.tool_node)
+        graph.set_entry_point("model")
+        
+        graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
+        graph.add_edge("tools", "model")
+        
+        # self.checkpointer = MemorySaver()
+        # agent_graph = graph.compile(checkpointer=self.checkpointer)
+        agent_graph = graph.compile()
+        
+        return agent_graph   
+
+
 class RevenueAnalystAgent:
 
     def __init__(self, llm):
@@ -223,8 +459,6 @@ class RevenueAnalystAgent:
         self.tool_node = ToolNode(self.tools)
         self.graph = self._create_agent()
 
-    # TODO actually the manager message will be in teh messages state automatically,
-    # let's confirm this
     class AgentState(MessagesState):
         pass
 
@@ -233,9 +467,9 @@ class RevenueAnalystAgent:
         The final report agent will call you and give you the relevenat data (its filename, which you can use in the analysis python code)
         
         You need to provide the following report from the data (if it is annual, adapt for quarterly):
-        1. total annual revenue
-        2. total monthly revenue
-        3. quarterly revenue
+        1. total revenue for the whole period
+        2. total revenue per months of the period
+        3. quarterly revenue (if the requested is annual), else none
         4. monthly and quarterly revenue trend
 
         you can use the tool run_python_code to run code to yield all the above information.
@@ -323,8 +557,9 @@ class RevenueAnalystAgent:
         graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
         graph.add_edge("tools", "model")
         
-        self.checkpointer = MemorySaver()
-        agent_graph = graph.compile(checkpointer=self.checkpointer)
+        # self.checkpointer = MemorySaver()
+        # agent_graph = graph.compile(checkpointer=self.checkpointer)
+        agent_graph = graph.compile()
         
         return agent_graph    
     
@@ -338,9 +573,15 @@ class FinalReportAgent:
             description="Assign task to a revenue analyst agent.",
         )
 
-        self.revenue_analyst_graph = RevenueAnalystAgent(llm=llm).graph
+        self.assign_to_order_analyst_agent = create_handoff_tool(
+            agent_name="order_analyst_agent",
+            description="Assign task to a order analyst agent"
+        )
 
-        self.tools = [self.assign_to_revenue_analyst_agent, get_order_data_for_period, run_python_code, tavily_search_tool]
+        self.revenue_analyst_graph = RevenueAnalystAgent(llm=llm).graph
+        self.order_analyst_graph = OrderAnalystAgent(llm=llm).graph
+
+        self.tools = [self.assign_to_order_analyst_agent, self.assign_to_revenue_analyst_agent, get_order_data_for_period, run_python_code, tavily_search_tool]
         # self.tools = [get_order_data_for_period, run_python_code, tavily_search_tool]
 
         self.llm = llm.bind_tools(self.tools)
@@ -351,7 +592,7 @@ class FinalReportAgent:
     class AgentState(MessagesState):
         pass
 
-    tobeadded_prompt = """- order report: overall order details, average order per person, trend of number of order, average purchase value per person, purchase trend in a year
+    tobeadded_prompt = """
         - product performance: top/bottom product from quantity sold, top/bottom product per month, top/bottom product per quarter, top annual revenue contributor product"""
 
     system_prompt_string = """
@@ -359,8 +600,8 @@ class FinalReportAgent:
         What you need to write is sales report for a specific period of time of a shopify store Urban Thread, selling apparels and accessories.
 
         For a final annual executive report, it must have all of the item here:
-        1. full revenue report: total revenue, monthly revenue, trend, quarterly revenue (handoff to revenue analyst agent)
-
+        1. revenue report: total revenue, monthly revenue, trend, quarterly revenue (handoff to revenue analyst agent)
+        2. order report: total number of order, number of order trend on each month, average spent per order, average spent per order trend on each month (handoff to order analyst agent)
         
         To finish the final report, do this one by one
 
@@ -372,7 +613,11 @@ class FinalReportAgent:
             - Generate the task to do WITHOUT calling the revenue analyst agent, and provide the relevant file name for the requested period.
             - Delegate the task by calling the handoff tool for revenue analyst agent
         
-        4. Finally you must review the output from worker agent and present it to the Main Agent.
+        4. Only after revenue analyt agent give you its analysis, you will then delegate the order analysis to the order analyst agent by following this step: 
+            - Generate the task to do WITHOUT calling the revenue analyst agent, and provide the relevant file name for the requested period.
+            - Delegate the task by calling the handoff tool for order analyst agent
+
+        4. Finally you must review the output from worker agents and present it to the Main Agent.
 
         You must present the final report in a markdown format without any quotes or anything, ready to be rendered.
 
@@ -416,7 +661,14 @@ class FinalReportAgent:
 
         return {"messages": [final_response]}
     
+    def order_analyst_agent_node(self, state: AgentState):
 
+        response = self.order_analyst_graph.invoke({"messages":state["messages"]})
+        # Extract the last message from the response
+        final_response = response["messages"][-1]
+
+        return {"messages": [final_response]}
+    
     def path_model_tool_END(self, state: AgentState):
 
         messages = state.get("messages", [])
@@ -441,7 +693,7 @@ class FinalReportAgent:
     
         # If the last message is a Command, return END
         print("last tool message in final report agent: ", last_message)
-        if "Successfully transferred to" in last_message.content:
+        if "<<HANDOFF TOOL CALLED>> Successfully transferred to" in last_message.content:
             print("last instance is handoff")
             return END
 
@@ -454,6 +706,7 @@ class FinalReportAgent:
         graph.add_node("model", self.main_node)
         graph.add_node("tools", self.tool_node)
         graph.add_node("revenue_analyst_agent", self.revenue_analyst_agent_node)
+        graph.add_node("order_analyst_agent", self.order_analyst_agent_node)
         graph.set_entry_point("model")
         
         graph.add_conditional_edges("model", self.path_model_tool_END, ["tools", "model", END])
@@ -461,6 +714,7 @@ class FinalReportAgent:
         # graph.add_edge("tools", "model")
         # graph.add_edge("tools", "revenue_analyst_agent")
         graph.add_edge("revenue_analyst_agent", "model")
+        graph.add_edge("order_analyst_agent", "model")
         
         agent_graph = graph.compile()
         
@@ -573,7 +827,7 @@ class MainAgent:
     
         # If the last message is a Command, return END
         print("last tool message in main agent: ", last_message)
-        if "Successfully transferred to" in last_message.content:
+        if "<<HANDOFF TOOL CALLED>> Successfully transferred to" in last_message.content:
             print("last instance is handoff")
             return END
 
