@@ -231,14 +231,14 @@ class ProductPerformanceAnalystAgent:
         pass
 
     system_prompt_string = """
-        You are order analysis agent, you will need to analyse order related insight out of sales data.
+        You are product performance analysis agent, you will need to analyse product performance related insight out of sales data.
         The final report agent will call you and give you the relevenat data (its filename, which you can use in the analysis python code)
 
         You need to provide the following report from the data, for the requested period:
-        1. total number of order overall
-        2. number of order trend on each month
-        3. average spent per order overall
-        4. average spent per order trend on each month
+        1. top/bottom overall product
+        2. top/bottom product per month
+        3. top/bottom revenue contributor product
+        4. top/bottom revenue contributor product per month
 
         you can use the tool run_python_code to run code to yield all the above information.
 
@@ -250,7 +250,7 @@ class ProductPerformanceAnalystAgent:
         Calculate every insight in one program at once if you can to be efficient in your work!
 
         if you have done all the analysis and have written the final data for the final report agent (your supervisor), end the response with this exact string:
-        "ALL ORDER ANALYSIS TASK IS DONE"
+        "ALL PRODUCT PERFORMANCE ANALYSIS TASK IS DONE"
 
         To code properly, here is the data structure and the keys you need to understand the data:
 
@@ -296,11 +296,11 @@ class ProductPerformanceAnalystAgent:
         messages = [SystemMessage(content=system_prompt.to_string())] + state["messages"]
         response = self.llm.invoke(messages)
 
-        pretty_print_message(response, agent_name="order analyst")
+        pretty_print_message(response, agent_name="product performance analyst")
 
         return {"messages": [response]}
 
-    def path_tool_model(self, state: AgentState):
+    def path_from_model(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -309,7 +309,7 @@ class ProductPerformanceAnalystAgent:
     
         if last_message.tool_calls:
             return "tools"
-        elif "ALL ORDER ANALYSIS TASK IS DONE" in last_message.content:
+        elif "ALL PRODUCT PERFORMANCE ANALYSIS TASK IS DONE" in last_message.content:
             return END
         
         return "model"
@@ -322,7 +322,7 @@ class ProductPerformanceAnalystAgent:
         graph.add_node("tools", self.tool_node)
         graph.set_entry_point("model")
         
-        graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
+        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
         graph.add_edge("tools", "model")
         
         # self.checkpointer = MemorySaver()
@@ -416,7 +416,7 @@ class OrderAnalystAgent:
 
         return {"messages": [response]}
 
-    def path_tool_model(self, state: AgentState):
+    def path_from_model(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -438,7 +438,7 @@ class OrderAnalystAgent:
         graph.add_node("tools", self.tool_node)
         graph.set_entry_point("model")
         
-        graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
+        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
         graph.add_edge("tools", "model")
         
         # self.checkpointer = MemorySaver()
@@ -532,7 +532,7 @@ class RevenueAnalystAgent:
 
         return {"messages": [response]}
 
-    def path_tool_model(self, state: AgentState):
+    def path_from_model(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -554,7 +554,7 @@ class RevenueAnalystAgent:
         graph.add_node("tools", self.tool_node)
         graph.set_entry_point("model")
         
-        graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
+        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
         graph.add_edge("tools", "model")
         
         # self.checkpointer = MemorySaver()
@@ -578,10 +578,16 @@ class FinalReportAgent:
             description="Assign task to a order analyst agent"
         )
 
+        self.assign_to_product_performance_analyst_agent = create_handoff_tool(
+            agent_name="product_performance_analyst_agent",
+            description="Assign task to a product performance analyst agent"
+        )
+
         self.revenue_analyst_graph = RevenueAnalystAgent(llm=llm).graph
         self.order_analyst_graph = OrderAnalystAgent(llm=llm).graph
+        self.product_performance_analyst_graph = ProductPerformanceAnalystAgent(llm=llm).graph
 
-        self.tools = [self.assign_to_order_analyst_agent, self.assign_to_revenue_analyst_agent, get_order_data_for_period, run_python_code, tavily_search_tool]
+        self.tools = [self. assign_to_product_performance_analyst_agent, self.assign_to_order_analyst_agent, self.assign_to_revenue_analyst_agent, get_order_data_for_period, run_python_code, tavily_search_tool]
         # self.tools = [get_order_data_for_period, run_python_code, tavily_search_tool]
 
         self.llm = llm.bind_tools(self.tools)
@@ -602,6 +608,7 @@ class FinalReportAgent:
         For a final annual executive report, it must have all of the item here:
         1. revenue report: total revenue, monthly revenue, trend, quarterly revenue (handoff to revenue analyst agent)
         2. order report: total number of order, number of order trend on each month, average spent per order, average spent per order trend on each month (handoff to order analyst agent)
+        3. product performance: top/bottom overall product, top/bottom product per month, top/bottom revenue contributor product, top/bottom revenue contributor product per month (handoff to product performance analyst agent)
         
         To finish the final report, do this one by one
 
@@ -613,11 +620,15 @@ class FinalReportAgent:
             - Generate the task to do WITHOUT calling the revenue analyst agent, and provide the relevant file name for the requested period.
             - Delegate the task by calling the handoff tool for revenue analyst agent
         
-        4. Only after revenue analyt agent give you its analysis, you will then delegate the order analysis to the order analyst agent by following this step: 
-            - Generate the task to do WITHOUT calling the revenue analyst agent, and provide the relevant file name for the requested period.
+        4. Only after revenue analyst agent give you its analysis, you will then delegate the order analysis to the order analyst agent by following this step: 
+            - Generate the task to do WITHOUT calling the order analyst agent, and provide the relevant file name for the requested period.
             - Delegate the task by calling the handoff tool for order analyst agent
 
-        4. Finally you must review the output from worker agents and present it to the Main Agent.
+        5. Only after order analyst agent give you its analysis, you will then delegate the product performance analysis to the product performance analyst agent by following this step: 
+            - Generate the task to do WITHOUT calling the product performance analyst agent, and provide the relevant file name for the requested period.
+            - Delegate the task by calling the handoff tool for product performance analyst agent
+
+        6. Finally you must review the output from worker agents and present it to the Main Agent.
 
         You must present the final report in a markdown format without any quotes or anything, ready to be rendered.
 
@@ -669,7 +680,15 @@ class FinalReportAgent:
 
         return {"messages": [final_response]}
     
-    def path_model_tool_END(self, state: AgentState):
+    def product_performance_analyst_agent_node(self, state: AgentState):
+
+        response = self.product_performance_analyst_graph.invoke({"messages":state["messages"]})
+        # Extract the last message from the response
+        final_response = response["messages"][-1]
+
+        return {"messages": [final_response]}   
+
+    def path_from_model(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -684,15 +703,16 @@ class FinalReportAgent:
 
         return "model"
     
-    def path_tool_END(self, state:AgentState):
+    def path_from_tools(self, state:AgentState):
 
         messages = state.get("messages", [])
         if not messages:
             return END
         last_message = messages[-1]
-    
-        # If the last message is a Command, return END
+
         print("last tool message in final report agent: ", last_message)
+
+        # If the last message is a Handoff, return END
         if "<<HANDOFF TOOL CALLED>> Successfully transferred to" in last_message.content:
             print("last instance is handoff")
             return END
@@ -707,14 +727,15 @@ class FinalReportAgent:
         graph.add_node("tools", self.tool_node)
         graph.add_node("revenue_analyst_agent", self.revenue_analyst_agent_node)
         graph.add_node("order_analyst_agent", self.order_analyst_agent_node)
+        graph.add_node("product_performance_analyst_agent", self.product_performance_analyst_agent_node)
         graph.set_entry_point("model")
         
-        graph.add_conditional_edges("model", self.path_model_tool_END, ["tools", "model", END])
-        graph.add_conditional_edges("tools", self.path_tool_END, ["model", END])
-        # graph.add_edge("tools", "model")
-        # graph.add_edge("tools", "revenue_analyst_agent")
+        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
+        graph.add_conditional_edges("tools", self.path_from_tools, ["model", END])
+        
         graph.add_edge("revenue_analyst_agent", "model")
         graph.add_edge("order_analyst_agent", "model")
+        graph.add_edge("product_performance_analyst_agent", "model")
         
         agent_graph = graph.compile()
         
