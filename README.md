@@ -39,7 +39,12 @@ cp .env.example .env
 # Add your OpenAI API key to .env
 ```
 
-5. Start the development servers:
+5. Initialize chroma vector database for knowledge base RAG
+```bash
+python3 ./server/init_knowledge_base_chroma.py
+```
+
+6. Start the development servers:
 
 Frontend (Next.js):
 ```bash
@@ -48,7 +53,7 @@ npm run dev
 
 Backend (Flask):
 ```bash
-python server/server.py
+flask --app server/server-langgraph.py run
 ```
 
 ## Project Structure

@@ -12,6 +12,9 @@ from langgraph.checkpoint.memory import MemorySaver
 from research_agent import ResearchAgent
 from langgraph.types import Command
 from langchain_tavily import TavilySearch
+from langchain_chroma import Chroma
+from langchain_openai import OpenAIEmbeddings
+
 import shopify
 import json
 import subprocess
@@ -21,8 +24,15 @@ from dotenv import load_dotenv
 
 load_dotenv()
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2, api_key=os.getenv("OPENAI_API_KEY"))
+embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
 
 app = Flask(__name__)
+
+vector_store = Chroma(
+    collection_name="knowledge_base",
+    embedding_function=embeddings,
+    persist_directory="./chroma_persist_dir",
+)
 
 # ////////////////////////////////////////////////////////////////
 # //////////////     Define tools for agents      ////////////////
@@ -172,7 +182,6 @@ def run_python_code(code: str):
 
     return result.stdout or result.stderr
 
-
 def create_handoff_tool(*, agent_name: str, description: str | None = None):
     name = f"transfer_to_{agent_name}"
     description = description or f"Ask {agent_name} for help."
@@ -202,6 +211,51 @@ def create_handoff_tool(*, agent_name: str, description: str | None = None):
 
     return handoff_tool
 
+@tool(parse_docstring=True)
+def get_information_from_knowledge_base(query: str, source: str):
+    """
+    get info using semantic information retrieval from the knowledge base vector database
+
+    Args:
+        query: string for query for information to look for in the knowledge base
+        source: string of the source file to be included in the search, including the extension .md. Available source files to search:
+        - annual_strategy_plan_for_2024.md 
+        - 2023_annual_report.md 
+        - 2023_business_review_meeting_notes.md 
+        - Q1_2024_Product_Launch_Brief.md 
+        - Q2_2024_Product_Launch_Brief.md 
+        - Q3_2024_Product_Launch_Brief.md 
+        - Q4_2024_Product_Launch_Brief.md 
+
+    """
+
+    results = vector_store.similarity_search(
+        query,
+        k=3,
+        filter={"source": source}
+    )
+
+    all_retrieved_doc_content = ""
+    for idx, doc in enumerate(results, 1):
+        all_retrieved_doc_content += f"retrieved doc {idx}:\n{doc.page_content}\n"
+
+    prompt = f"""
+
+        you need to summarize the answer of this query based on the information retrieved that semantically adjacent to the query,
+        whether the question can answer fully, partially, or not answering at all. Make your answer to be concise yet also complete with all relevant information included.
+
+        this is the query:
+        {query}
+
+        this is the information retrieved from source file {source}:
+        {all_retrieved_doc_content}
+
+        """
+
+    prompt_response = llm.invoke(prompt)
+
+    return prompt_response.content
+
 def pretty_print_message(message, indent=False, agent_name=""):
     pretty_message = message.pretty_repr(html=True)
     if not indent:
@@ -216,6 +270,89 @@ def pretty_print_message(message, indent=False, agent_name=""):
 # //////////////           Define Agents          ////////////////
 # ////////////////////////////////////////////////////////////////
 # \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+
+class StrategicAnalystAgent:
+
+    def __init__(self, llm):
+        self.tools = [get_information_from_knowledge_base, run_python_code, tavily_search_tool]
+
+        self.llm_with_tools = llm.bind_tools(self.tools)
+        self.llm = llm.bind_tools(self.tools)
+
+        self.tool_node = ToolNode(self.tools)
+        self.graph = self._create_agent()
+
+    class AgentState(MessagesState):
+        pass
+
+    system_prompt_string = """
+        You are strategic analysis agent, you will need to analyse business strategy related insight out of sales data and current revenue, order, and product insight already supplied by the other agent.
+        The final report agent will call you and give you the relevenat data for business strategic review.
+
+        You need to provide the following report from the data, for the requested period:
+        1. summarization of goals and targets from annual strategy plan documents in the knowledge base for the current year AND the current period.
+        2. goals and targets met and surpassed in the current period
+        3. goals and targets unmet in the current period
+        4. other relevant and interesting insight on the current sales and its reflection on knowledge base documents.
+
+        you WILL use the get_information_from_knowledge_base tool to get the relevant information for the current period.
+        you can use the tool run_python_code to run code to calculate complex math if you need to.
+
+        you must NOT calculate NOR process the sales/order data, you only need to provide strategic level insight based on the information in the knowledge base.
+
+        if you have done all the analysis and have written the final data for the final report agent (your supervisor), end the response with this exact string:
+        "ALL STRATEGIC ANALYSIS TASK IS DONE"
+
+        this is the previous messages history:
+    """
+
+    def main_node(self, state: AgentState):
+
+        prompt_template = ChatPromptTemplate([
+          ("system", self.system_prompt_string)
+        ])
+
+        system_prompt = prompt_template.invoke({})
+
+        messages = [SystemMessage(content=system_prompt.to_string())] + state["messages"]
+        response = self.llm.invoke(messages)
+
+        pretty_print_message(response, agent_name="strategic analyst")
+
+        return {"messages": [response]}
+
+    def path_from_model(self, state: AgentState):
+
+        messages = state.get("messages", [])
+        if not messages:
+            return END
+        last_message = messages[-1]
+    
+        if last_message.tool_calls:
+            return "tools"
+        elif "ALL STRATEGIC ANALYSIS TASK IS DONE" in last_message.content:
+            return END
+        
+        return "model"
+
+    def _create_agent(self):
+        graph = StateGraph(self.AgentState)
+        
+        # Add the model node
+        graph.add_node("model", self.main_node)
+        graph.add_node("tools", self.tool_node)
+        graph.set_entry_point("model")
+        
+        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
+        graph.add_edge("tools", "model")
+        
+        # self.checkpointer = MemorySaver()
+        # agent_graph = graph.compile(checkpointer=self.checkpointer)
+        agent_graph = graph.compile()
+        
+        return agent_graph   
+    
+
 class ProductPerformanceAnalystAgent:
 
     def __init__(self, llm):
@@ -597,12 +734,18 @@ class FinalReportAgent:
             agent_name="product_performance_analyst_agent",
             description="Assign task to a product performance analyst agent"
         )
+    
+        self.assign_to_strategic_analyst_agent = create_handoff_tool(
+            agent_name="strategic_analyst_agent",
+            description="Assign task to a strategic analyst agent"
+        )
 
         self.revenue_analyst_graph = RevenueAnalystAgent(llm=llm).graph
         self.order_analyst_graph = OrderAnalystAgent(llm=llm).graph
         self.product_performance_analyst_graph = ProductPerformanceAnalystAgent(llm=llm).graph
+        self.strategic_analyst_graph = StrategicAnalystAgent(llm=llm).graph
 
-        self.tools = [self. assign_to_product_performance_analyst_agent, self.assign_to_order_analyst_agent, self.assign_to_revenue_analyst_agent, get_order_data_for_period, run_python_code, tavily_search_tool]
+        self.tools = [self.assign_to_strategic_analyst_agent, self. assign_to_product_performance_analyst_agent, self.assign_to_order_analyst_agent, self.assign_to_revenue_analyst_agent, get_order_data_for_period, run_python_code, tavily_search_tool]
         # self.tools = [get_order_data_for_period, run_python_code, tavily_search_tool]
 
         self.llm = llm.bind_tools(self.tools)
@@ -624,6 +767,7 @@ class FinalReportAgent:
         1. revenue report: total revenue, monthly revenue, trend, quarterly revenue (handoff to revenue analyst agent)
         2. order report: total number of order, number of order trend on each month, average spent per order, average spent per order trend on each month (handoff to order analyst agent)
         3. product performance: top/bottom overall product, top/bottom product per month, top/bottom revenue contributor product, top/bottom revenue contributor product per month (handoff to product performance analyst agent)
+        4. strategic analyses: current report compared to annual strategy plan, target metrics vs actual realization metrics, met and unmet sales goal.
         
         To finish the final report, do this one by one
 
@@ -643,7 +787,11 @@ class FinalReportAgent:
             - Generate the task to do WITHOUT calling the product performance analyst agent, and provide the relevant file name for the requested period.
             - Delegate the task by calling the handoff tool for product performance analyst agent
 
-        6. Finally you must review the output from worker agents and present it to the Main Agent.
+        6. Only after product analyst agent give you its analysis, you will then delegate the strategic analysis to the strategic analyst agent by following this step: 
+            - Generate the task to do WITHOUT calling the strategic analyst agent, and provide the relevant file name for the requested period.
+            - Delegate the task by calling the handoff tool for strategic analyst agent
+
+        7. Finally you must review the output from worker agents and present it to the Main Agent.
 
         You must present the final report in a markdown format without any quotes or anything, ready to be rendered.
 
@@ -703,6 +851,14 @@ class FinalReportAgent:
 
         return {"messages": [final_response]}   
 
+    def strategic_analyst_agent_node(self, state: AgentState):
+
+        response = self.strategic_analyst_graph.invoke({"messages":state["messages"]})
+        # Extract the last message from the response
+        final_response = response["messages"][-1]
+
+        return {"messages": [final_response]}  
+
     def path_from_model(self, state: AgentState):
 
         messages = state.get("messages", [])
@@ -743,6 +899,8 @@ class FinalReportAgent:
         graph.add_node("revenue_analyst_agent", self.revenue_analyst_agent_node)
         graph.add_node("order_analyst_agent", self.order_analyst_agent_node)
         graph.add_node("product_performance_analyst_agent", self.product_performance_analyst_agent_node)
+        graph.add_node("strategic_analyst_agent", self.strategic_analyst_agent_node)
+        
         graph.set_entry_point("model")
         
         graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
@@ -751,6 +909,7 @@ class FinalReportAgent:
         graph.add_edge("revenue_analyst_agent", "model")
         graph.add_edge("order_analyst_agent", "model")
         graph.add_edge("product_performance_analyst_agent", "model")
+        graph.add_edge("strategic_analyst_agent", "model")
         
         agent_graph = graph.compile()
         
@@ -767,7 +926,7 @@ class MainAgent:
             description="Assign task to a final report agent.",
         )
 
-        self.tools = [get_order_data_for_period, self.assign_to_final_report_agent, run_python_code, tavily_search_tool]
+        self.tools = [get_information_from_knowledge_base, get_order_data_for_period, self.assign_to_final_report_agent, run_python_code, tavily_search_tool]
 
         self.llm_with_tools = llm.bind_tools(self.tools)
         self.llm = llm.bind_tools(self.tools)

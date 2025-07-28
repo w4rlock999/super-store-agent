@@ -161,3 +161,8 @@ env/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# ChromaDB persist directory
+!server/chroma_persist_dir
+server/chroma_persist_dir/*
+!server/chroma_persist_dir/.gitkeep
