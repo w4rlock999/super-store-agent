@@ -14,6 +14,7 @@ from langgraph.types import Command
 from langchain_tavily import TavilySearch
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
+from langchain_core.documents import Document
 
 import shopify
 import json
@@ -43,6 +44,29 @@ tavily_search_tool = TavilySearch(
     api_key=os.getenv("TAVILY_API_KEY"),
     max_results=5
 )
+
+def save_to_knowledge_base_LTM(memory_entry: str):
+    try:
+        memory_entry_document = Document(page_content=memory_entry, metadata={"source": "historical_long_term_memory"})
+        vector_store.add_documents([memory_entry_document])
+        return {"status": "success", "message": "Memory entry saved to knowledge base."}
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to save memory entry: {str(e)}"}
+
+@tool(parse_docstring=True)
+def save_to_knowledge_base_LTM_tool(memory_entry: str):
+
+    """
+    Tool to save a memory entry to the knowledge base long-term memory (LTM).
+    
+    Args:
+        memory_entry: string of the memory entry. Should be summarization of the discourse, valuable insight, or interesting things worthy to save into LTM.
+        memory entry should be concise and focused on one single idea. In the case of multiple idea to be saved, call the tool multiple time.
+        this tool mainly to save historical conversation between agent and human.
+    """
+    result = save_to_knowledge_base_LTM(memory_entry)
+    # Return the message regardless of success or error
+    return result["message"]
 
 @tool 
 def get_order_data_for_period(start_date: str, end_date: str, save_to_filename: str, ) -> str:
@@ -218,7 +242,7 @@ def get_information_from_knowledge_base(query: str, source: str):
 
     Args:
         query: string for query for information to look for in the knowledge base
-        source: string of the source file to be included in the search, including the extension .md. Available source files to search:
+        source: string of the source file to be included in the search, including the extension (e.g. ".md") if applicable. Available source files to search:
         - annual_strategy_plan_for_2024.md 
         - 2023_annual_report.md 
         - 2023_business_review_meeting_notes.md 
@@ -226,6 +250,7 @@ def get_information_from_knowledge_base(query: str, source: str):
         - Q2_2024_Product_Launch_Brief.md 
         - Q3_2024_Product_Launch_Brief.md 
         - Q4_2024_Product_Launch_Brief.md 
+        - historical_long_term_memory
 
     """
 
@@ -926,7 +951,7 @@ class MainAgent:
             description="Assign task to a final report agent.",
         )
 
-        self.tools = [get_information_from_knowledge_base, get_order_data_for_period, self.assign_to_final_report_agent, run_python_code, tavily_search_tool]
+        self.tools = [save_to_knowledge_base_LTM_tool, get_information_from_knowledge_base, get_order_data_for_period, self.assign_to_final_report_agent, run_python_code, tavily_search_tool]
 
         self.llm_with_tools = llm.bind_tools(self.tools)
         self.llm = llm.bind_tools(self.tools)
