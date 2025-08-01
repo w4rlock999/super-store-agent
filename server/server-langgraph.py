@@ -15,6 +15,14 @@ from langchain_tavily import TavilySearch
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
+import mlflow
+import datetime
+
+
+mlflow.langchain.autolog()
+mlflow.set_tracking_uri("http://localhost:5050")
+experiment_name = f"LangGraph_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+mlflow.set_experiment(experiment_name)
 
 import shopify
 import json
