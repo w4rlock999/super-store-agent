@@ -17,7 +17,7 @@ from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
 import mlflow
 import datetime
-
+from mlflow.entities import SpanType
 
 mlflow.langchain.autolog()
 mlflow.set_tracking_uri("http://localhost:5050")
@@ -354,7 +354,7 @@ class StrategicAnalystAgent:
 
         return {"messages": [response]}
 
-    def path_from_model(self, state: AgentState):
+    def path_from_strategic_analyst_agent_main_node(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -362,22 +362,23 @@ class StrategicAnalystAgent:
         last_message = messages[-1]
     
         if last_message.tool_calls:
-            return "tools"
+            return "strategic_analyst_agent_tools"
         elif "ALL STRATEGIC ANALYSIS TASK IS DONE" in last_message.content:
             return END
         
-        return "model"
+        return "strategic_analyst_agent_main_node"
 
     def _create_agent(self):
         graph = StateGraph(self.AgentState)
         
         # Add the model node
-        graph.add_node("model", self.main_node)
-        graph.add_node("tools", self.tool_node)
-        graph.set_entry_point("model")
+        graph.add_node("strategic_analyst_agent_main_node", self.main_node)
+        graph.add_node("strategic_analyst_agent_tools", self.tool_node)
+        graph.set_entry_point("strategic_analyst_agent_main_node")
         
-        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
-        graph.add_edge("tools", "model")
+        graph.add_conditional_edges("strategic_analyst_agent_main_node", self.path_from_strategic_analyst_agent_main_node, ["strategic_analyst_agent_tools", "strategic_analyst_agent_main_node", END])
+        graph.add_edge("strategic_analyst_agent_tools", "strategic_analyst_agent_main_node")
+        
         
         # self.checkpointer = MemorySaver()
         # agent_graph = graph.compile(checkpointer=self.checkpointer)
@@ -475,7 +476,7 @@ class ProductPerformanceAnalystAgent:
 
         return {"messages": [response]}
 
-    def path_from_model(self, state: AgentState):
+    def path_from_product_performance_analyst_agent_main_node(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -483,22 +484,23 @@ class ProductPerformanceAnalystAgent:
         last_message = messages[-1]
     
         if last_message.tool_calls:
-            return "tools"
+            return "product_performance_analyst_agent_tools"
         elif "ALL PRODUCT PERFORMANCE ANALYSIS TASK IS DONE" in last_message.content:
             return END
         
-        return "model"
+        return "product_performance_analyst_agent_main_node"
 
     def _create_agent(self):
         graph = StateGraph(self.AgentState)
         
         # Add the model node
-        graph.add_node("model", self.main_node)
-        graph.add_node("tools", self.tool_node)
-        graph.set_entry_point("model")
+        graph.add_node("product_performance_analyst_agent_main_node", self.main_node)
+        graph.add_node("product_performance_analyst_agent_tools", self.tool_node)
+        graph.set_entry_point("product_performance_analyst_agent_main_node")
         
-        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
-        graph.add_edge("tools", "model")
+        graph.add_conditional_edges("product_performance_analyst_agent_main_node", self.path_from_product_performance_analyst_agent_main_node, ["product_performance_analyst_agent_tools", "product_performance_analyst_agent_main_node", END])
+        graph.add_edge("product_performance_analyst_agent_tools", "product_performance_analyst_agent_main_node")
+        
         
         # self.checkpointer = MemorySaver()
         # agent_graph = graph.compile(checkpointer=self.checkpointer)
@@ -596,7 +598,7 @@ class OrderAnalystAgent:
 
         return {"messages": [response]}
 
-    def path_from_model(self, state: AgentState):
+    def path_from_order_analyst_agent_main_node(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -604,22 +606,22 @@ class OrderAnalystAgent:
         last_message = messages[-1]
     
         if last_message.tool_calls:
-            return "tools"
+            return "order_analyst_agent_tools"
         elif "ALL ORDER ANALYSIS TASK IS DONE" in last_message.content:
             return END
         
-        return "model"
+        return "order_analyst_agent_main_node"
 
     def _create_agent(self):
         graph = StateGraph(self.AgentState)
         
         # Add the model node
-        graph.add_node("model", self.main_node)
-        graph.add_node("tools", self.tool_node)
-        graph.set_entry_point("model")
+        graph.add_node("order_analyst_agent_main_node", self.main_node)
+        graph.add_node("order_analyst_agent_tools", self.tool_node)
+        graph.set_entry_point("order_analyst_agent_main_node")
         
-        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
-        graph.add_edge("tools", "model")
+        graph.add_conditional_edges("order_analyst_agent_main_node", self.path_from_order_analyst_agent_main_node, ["order_analyst_agent_tools", "order_analyst_agent_main_node", END])
+        graph.add_edge("order_analyst_agent_tools", "order_analyst_agent_main_node")
         
         # self.checkpointer = MemorySaver()
         # agent_graph = graph.compile(checkpointer=self.checkpointer)
@@ -717,7 +719,7 @@ class RevenueAnalystAgent:
 
         return {"messages": [response]}
 
-    def path_from_model(self, state: AgentState):
+    def path_from_revenue_analyst_agent_main_node(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -725,22 +727,22 @@ class RevenueAnalystAgent:
         last_message = messages[-1]
     
         if last_message.tool_calls:
-            return "tools"
+            return "revenue_analyst_agent_tools"
         elif "ALL REVENUE ANALYSIS TASK IS DONE" in last_message.content:
             return END
         
-        return "model"
+        return "revenue_analyst_agent_main_node"
 
     def _create_agent(self):
         graph = StateGraph(self.AgentState)
         
         # Add the model node
-        graph.add_node("model", self.main_node)
-        graph.add_node("tools", self.tool_node)
-        graph.set_entry_point("model")
-        
-        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
-        graph.add_edge("tools", "model")
+        graph.add_node("revenue_analyst_agent_main_node", self.main_node)
+        graph.add_node("revenue_analyst_agent_tools", self.tool_node)
+        graph.set_entry_point("revenue_analyst_agent_main_node")
+
+        graph.add_conditional_edges("revenue_analyst_agent_main_node", self.path_from_revenue_analyst_agent_main_node, ["revenue_analyst_agent_tools", "revenue_analyst_agent_main_node", END])
+        graph.add_edge("revenue_analyst_agent_tools", "revenue_analyst_agent_main_node")
         
         # self.checkpointer = MemorySaver()
         # agent_graph = graph.compile(checkpointer=self.checkpointer)
@@ -892,7 +894,7 @@ class FinalReportAgent:
 
         return {"messages": [final_response]}  
 
-    def path_from_model(self, state: AgentState):
+    def path_from_final_report_agent_main_node(self, state: AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -901,13 +903,13 @@ class FinalReportAgent:
     
 
         if last_message.tool_calls:
-            return "tools"
+            return "final_report_agent_tools"
         elif "THIS IS THE END OF THE SALES REPORT" in last_message.content:
             return END
 
-        return "model"
+        return "final_report_agent_main_node"
     
-    def path_from_tools(self, state:AgentState):
+    def path_from_final_report_agent_tools(self, state:AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -921,28 +923,28 @@ class FinalReportAgent:
             print("last instance is handoff")
             return END
 
-        return "model"
+        return "final_report_agent_main_node"
 
     def _create_agent(self):
         graph = StateGraph(self.AgentState)
         
         # Add the model node
-        graph.add_node("model", self.main_node)
-        graph.add_node("tools", self.tool_node)
-        graph.add_node("revenue_analyst_agent", self.revenue_analyst_agent_node)
-        graph.add_node("order_analyst_agent", self.order_analyst_agent_node)
-        graph.add_node("product_performance_analyst_agent", self.product_performance_analyst_agent_node)
-        graph.add_node("strategic_analyst_agent", self.strategic_analyst_agent_node)
+        graph.add_node("final_report_agent_main_node", self.main_node)
+        graph.add_node("final_report_agent_tools", self.tool_node)
+        graph.add_node("revenue_analyst_agent_node", self.revenue_analyst_agent_node)
+        graph.add_node("order_analyst_agent_node", self.order_analyst_agent_node)
+        graph.add_node("product_performance_analyst_agent_node", self.product_performance_analyst_agent_node)
+        graph.add_node("strategic_analyst_agent_node", self.strategic_analyst_agent_node)
         
-        graph.set_entry_point("model")
+        graph.set_entry_point("final_report_agent_main_node")
         
-        graph.add_conditional_edges("model", self.path_from_model, ["tools", "model", END])
-        graph.add_conditional_edges("tools", self.path_from_tools, ["model", END])
+        graph.add_conditional_edges("final_report_agent_main_node", self.path_from_final_report_agent_main_node, ["final_report_agent_tools", "final_report_agent_main_node", END])
+        graph.add_conditional_edges("final_report_agent_tools", self.path_from_final_report_agent_tools, ["final_report_agent_main_node", END])
         
-        graph.add_edge("revenue_analyst_agent", "model")
-        graph.add_edge("order_analyst_agent", "model")
-        graph.add_edge("product_performance_analyst_agent", "model")
-        graph.add_edge("strategic_analyst_agent", "model")
+        graph.add_edge("revenue_analyst_agent_node", "final_report_agent_main_node")
+        graph.add_edge("order_analyst_agent_node", "final_report_agent_main_node")
+        graph.add_edge("product_performance_analyst_agent_node", "final_report_agent_main_node")
+        graph.add_edge("strategic_analyst_agent_node", "final_report_agent_main_node")
         
         agent_graph = graph.compile()
         
@@ -1031,7 +1033,10 @@ class MainAgent:
         response = self.llm.invoke(messages)
 
         pretty_print_message(response, agent_name="main agent")
-        # print("DIRTY PRINT: ", response)
+
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "main_agent", "short_term_memory": "main_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[response]})
 
         return {"messages": [response]}
 
@@ -1040,19 +1045,23 @@ class MainAgent:
         # Extract the last message from the response
         final_response = response["messages"][-1]
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "main_agent", "short_term_memory": "main_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[final_response]})
+
         return {"messages": [final_response]}
 
-    def path_tool_model(self, state: AgentState):
+    def path_from_main_agent_main_node(self, state: AgentState):
         messages = state.get("messages", [])
         if not messages:
             return END
         last_message = messages[-1]
     
         if last_message.tool_calls:
-            return "tools"
+            return "main_agent_tools"
         return END
 
-    def path_tool_END(self, state:AgentState):
+    def path_from_main_agent_tools(self, state:AgentState):
 
         messages = state.get("messages", [])
         if not messages:
@@ -1065,22 +1074,21 @@ class MainAgent:
             print("last instance is handoff")
             return END
 
-        return "model"
+        return "main_agent_main_node"
 
     def _create_agent(self):
         graph = StateGraph(self.AgentState)
         
         # Add the model node
-        # TODO rename "model" to main agent
-        graph.add_node("model", self.main_node)
-        graph.add_node("tools", self.tool_node)
-        graph.add_node("final_report_agent", self.final_report_agent_node)
-        graph.set_entry_point("model")
+        graph.add_node("main_agent_main_node", self.main_node)
+        graph.add_node("main_agent_tools", self.tool_node)
+        graph.add_node("final_report_agent_node", self.final_report_agent_node)
+        graph.set_entry_point("main_agent_main_node")
         
-        graph.add_conditional_edges("model", self.path_tool_model, ["tools", END])
-        graph.add_conditional_edges("tools", self.path_tool_END, ["model", END])
-        # graph.add_edge("tools", "model")
-        graph.add_edge("final_report_agent", "model")
+        graph.add_conditional_edges("main_agent_main_node", self.path_from_main_agent_main_node, ["main_agent_tools", END])
+        graph.add_conditional_edges("main_agent_tools", self.path_from_main_agent_tools, ["main_agent_main_node", END])
+
+        graph.add_edge("final_report_agent_node", "main_agent_main_node")
         
         self.checkpointer = MemorySaver()
         agent_graph = graph.compile(checkpointer=self.checkpointer)
