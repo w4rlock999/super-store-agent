@@ -141,6 +141,8 @@ server/runtime_data/*
 
 !server/.env.example
 
+*/mlruns/
+
 server/mlruns/
 server/mlartifacts/
 server/chroma_db/
