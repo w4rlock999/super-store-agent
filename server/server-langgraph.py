@@ -15,21 +15,21 @@ from langchain_tavily import TavilySearch
 from langchain_chroma import Chroma
 from langchain_openai import OpenAIEmbeddings
 from langchain_core.documents import Document
-import mlflow
+import shopify
+import json
+import subprocess
+import os
+from dotenv import load_dotenv
 import datetime
+import mlflow
 from mlflow.entities import SpanType
+
 
 mlflow.langchain.autolog()
 mlflow.set_tracking_uri("http://localhost:5050")
 experiment_name = f"LangGraph_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
 mlflow.set_experiment(experiment_name)
 
-import shopify
-import json
-import subprocess
-
-import os
-from dotenv import load_dotenv
 
 load_dotenv()
 llm = ChatOpenAI(model="gpt-4o-mini", temperature=0.2, api_key=os.getenv("OPENAI_API_KEY"))
@@ -299,10 +299,9 @@ def pretty_print_message(message, indent=False, agent_name=""):
     indented = "\n".join("\t" + c for c in pretty_message.split("\n"))
     print(indented)
 
-# ////////////////////////////////////////////////////////////////
-# //////////////           Define Agents          ////////////////
-# ////////////////////////////////////////////////////////////////
-# \\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\\
+# ==============================================================
+# ==============          Define Agents          ===============
+# ==============================================================
 
 class StrategicAnalystAgent:
 
@@ -352,6 +351,10 @@ class StrategicAnalystAgent:
 
         pretty_print_message(response, agent_name="strategic analyst")
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "strategic_analyst_agent", "short_term_memory": "strategic_analyst_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[response]})
+
         return {"messages": [response]}
 
     def path_from_strategic_analyst_agent_main_node(self, state: AgentState):
@@ -378,7 +381,6 @@ class StrategicAnalystAgent:
         
         graph.add_conditional_edges("strategic_analyst_agent_main_node", self.path_from_strategic_analyst_agent_main_node, ["strategic_analyst_agent_tools", "strategic_analyst_agent_main_node", END])
         graph.add_edge("strategic_analyst_agent_tools", "strategic_analyst_agent_main_node")
-        
         
         # self.checkpointer = MemorySaver()
         # agent_graph = graph.compile(checkpointer=self.checkpointer)
@@ -474,6 +476,10 @@ class ProductPerformanceAnalystAgent:
 
         pretty_print_message(response, agent_name="product performance analyst")
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "product_performance_analyst_agent", "short_term_memory": "product_performance_analyst_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[response]})
+
         return {"messages": [response]}
 
     def path_from_product_performance_analyst_agent_main_node(self, state: AgentState):
@@ -500,7 +506,6 @@ class ProductPerformanceAnalystAgent:
         
         graph.add_conditional_edges("product_performance_analyst_agent_main_node", self.path_from_product_performance_analyst_agent_main_node, ["product_performance_analyst_agent_tools", "product_performance_analyst_agent_main_node", END])
         graph.add_edge("product_performance_analyst_agent_tools", "product_performance_analyst_agent_main_node")
-        
         
         # self.checkpointer = MemorySaver()
         # agent_graph = graph.compile(checkpointer=self.checkpointer)
@@ -595,6 +600,10 @@ class OrderAnalystAgent:
         response = self.llm.invoke(messages)
 
         pretty_print_message(response, agent_name="order analyst")
+
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "order_analyst_agent", "short_term_memory": "order_analyst_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[response]})
 
         return {"messages": [response]}
 
@@ -717,6 +726,10 @@ class RevenueAnalystAgent:
 
         pretty_print_message(response, agent_name="revenue analyst")
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "revenue_analyst_agent", "short_term_memory": "revenue_analyst_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[response]})
+
         return {"messages": [response]}
 
     def path_from_revenue_analyst_agent_main_node(self, state: AgentState):
@@ -756,23 +769,23 @@ class FinalReportAgent:
     def __init__(self, llm):
 
         self.assign_to_revenue_analyst_agent = create_handoff_tool(
-            agent_name="revenue_analyst_agent",
+            agent_name="revenue_analyst_agent_node",
             description="Assign task to a revenue analyst agent.",
         )
 
         self.assign_to_order_analyst_agent = create_handoff_tool(
-            agent_name="order_analyst_agent",
-            description="Assign task to a order analyst agent"
+            agent_name="order_analyst_agent_node",
+            description="Assign task to a order analyst agent",
         )
 
         self.assign_to_product_performance_analyst_agent = create_handoff_tool(
-            agent_name="product_performance_analyst_agent",
-            description="Assign task to a product performance analyst agent"
+            agent_name="product_performance_analyst_agent_node",
+            description="Assign task to a product performance analyst agent",
         )
     
         self.assign_to_strategic_analyst_agent = create_handoff_tool(
-            agent_name="strategic_analyst_agent",
-            description="Assign task to a strategic analyst agent"
+            agent_name="strategic_analyst_agent_node",
+            description="Assign task to a strategic analyst agent",
         )
 
         self.revenue_analyst_graph = RevenueAnalystAgent(llm=llm).graph
@@ -788,6 +801,7 @@ class FinalReportAgent:
         self.tool_node = ToolNode(self.tools)
         self.graph = self._create_agent()
     
+
     class AgentState(MessagesState):
         pass
 
@@ -859,6 +873,9 @@ class FinalReportAgent:
 
         pretty_print_message(response, agent_name="final report agent")
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "final_report_agent", "short_term_memory": "final_report_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[response]})
 
         return {"messages": [response]}
 
@@ -868,6 +885,10 @@ class FinalReportAgent:
         # Extract the last message from the response
         final_response = response["messages"][-1]
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "final_report_agent", "short_term_memory": "final_report_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[final_response]})
+
         return {"messages": [final_response]}
     
     def order_analyst_agent_node(self, state: AgentState):
@@ -875,6 +896,10 @@ class FinalReportAgent:
         response = self.order_analyst_graph.invoke({"messages":state["messages"]})
         # Extract the last message from the response
         final_response = response["messages"][-1]
+
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "final_report_agent", "short_term_memory": "final_report_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[final_response]})
 
         return {"messages": [final_response]}
     
@@ -884,6 +909,10 @@ class FinalReportAgent:
         # Extract the last message from the response
         final_response = response["messages"][-1]
 
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "final_report_agent", "short_term_memory": "final_report_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[final_response]})
+
         return {"messages": [final_response]}   
 
     def strategic_analyst_agent_node(self, state: AgentState):
@@ -891,6 +920,10 @@ class FinalReportAgent:
         response = self.strategic_analyst_graph.invoke({"messages":state["messages"]})
         # Extract the last message from the response
         final_response = response["messages"][-1]
+
+        with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
+            span.set_inputs({"agent": "final_report_agent", "short_term_memory": "final_report_agent_messages"})
+            span.set_outputs({"update": state["messages"]+[final_response]})
 
         return {"messages": [final_response]}  
 
@@ -957,7 +990,7 @@ class MainAgent:
         self.final_report_graph = FinalReportAgent(llm=llm).graph
 
         self.assign_to_final_report_agent = create_handoff_tool(
-            agent_name="final_report_agent",
+            agent_name="final_report_agent_node",
             description="Assign task to a final report agent.",
         )
 
@@ -971,7 +1004,7 @@ class MainAgent:
 
     class AgentState(MessagesState):
         pass
-    
+
     agent_prompt_string = f"""
     You are a helpful assistant that can answer questions and help with tasks. 
     Always try write output in a nice markdown format. 
@@ -990,7 +1023,10 @@ class MainAgent:
 
     When user request for a final report, you will know to delegate the work to the final report agent.
     Check the chat history so far, when you see in the chat history that the final report agent already return you the requested final report and you have not present it to the user, you MUST present it to the user if you haven't!
-
+    
+    After receiving a report from the final report agent, the assistant (you) must always present that report to the user without exception.
+    YOU FAIL YOUR TASK IF AFTER RECEIVING THE FINAL REPORT YOU ONLY SAY "FINAL REPORT IS ALREADY SUCCESSFULLY PREPARED AND HANDED OFF"
+    
     To code properly, you will need to understand the structure of the order data, where each order has the following structure:
     If you see error when running the python code indicating that the structure of the data is different than your thought, try to run a code to understand the structure first by picking two first entry of the data. NEVER OUTPUT THE WHOLE FILE.
     
@@ -1033,7 +1069,8 @@ class MainAgent:
         response = self.llm.invoke(messages)
 
         pretty_print_message(response, agent_name="main agent")
-
+        # print("DIRTY PRINT: ", response)
+        
         with mlflow.start_span(name="ShortTermMemoryUpdate", span_type="SHORT_TERM_MEMORY_UPDATE") as span:
             span.set_inputs({"agent": "main_agent", "short_term_memory": "main_agent_messages"})
             span.set_outputs({"update": state["messages"]+[response]})
